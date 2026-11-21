@@ -1,0 +1,411 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core identity & validation primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidShortId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isBoundedString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // Validation Blueprint: UserProfile
+    function isValidUser(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'businessName', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'businessName', 'role', 'createdAt', 'updatedAt'])
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && isValidId(data.uid)
+        && isBoundedString(data.email, 3, 254)
+        && isBoundedString(data.displayName, 1, 120)
+        && isBoundedString(data.businessName, 1, 120)
+        && data.role == 'analyst'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: EvidenceDocument (6 MSME lending categories; WhatsApp/communication permanently blocked)
+    function isValidDocument(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessId', 'fileName', 'category', 'subcategory',
+          'fileSize', 'mimeType', 'uploadStatus', 'ocrStatus',
+          'verificationStatus', 'extractedSummary', 'isDemo',
+          'processingPurpose', 'authorizedBySubmitter', 'containsThirdPartyPii',
+          'piiRedactionApplied', 'retentionPolicyDays', 'accessScope',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessId', 'fileName', 'category', 'subcategory',
+          'fileSize', 'mimeType', 'uploadStatus', 'ocrStatus',
+          'verificationStatus', 'extractedSummary', 'isDemo',
+          'processingPurpose', 'authorizedBySubmitter', 'containsThirdPartyPii',
+          'piiRedactionApplied', 'retentionPolicyDays', 'accessScope',
+          'createdAt', 'updatedAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.businessId)
+        && isBoundedString(data.fileName, 1, 200)
+        && data.category in [
+          'financial_statements', 'banking_documents', 'gst_tax_documents',
+          'transaction_documents', 'registration_documents', 'credit_history_documents',
+          'financial_document', 'business_transaction', 'operational_document', 'supporting_evidence',
+          'identity', 'bank', 'financial_statement', 'loan', 'transaction_evidence'
+        ]
+        && isBoundedString(data.subcategory, 1, 100)
+        && data.fileSize is number && data.fileSize >= 0 && data.fileSize <= 52428800
+        && isBoundedString(data.mimeType, 1, 100)
+        && data.uploadStatus in ['uploaded', 'processing', 'failed']
+        && data.ocrStatus in ['pending', 'completed', 'partial', 'failed', 'not_applicable']
+        && data.verificationStatus in ['Extracted', 'Complete', 'Missing Information', 'Unreadable', 'Inconsistent', 'Requires Manual Review', 'Insufficient Evidence']
+        && isBoundedString(data.extractedSummary, 0, 2000)
+        && data.isDemo is bool
+        && isBoundedString(data.processingPurpose, 5, 240)
+        && data.authorizedBySubmitter == true
+        && data.containsThirdPartyPii is bool
+        && data.piiRedactionApplied is bool
+        && data.retentionPolicyDays is number && data.retentionPolicyDays >= 30 && data.retentionPolicyDays <= 2555
+        && data.accessScope in ['workspace_authorized_only', 'restricted_owner_only']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: ManualCorrection
+    function isValidCorrection(data) {
+      return data.keys().hasAll([
+          'ownerId', 'documentId', 'recordId', 'fieldName',
+          'originalValue', 'correctedValue', 'reason', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'documentId', 'recordId', 'fieldName',
+          'originalValue', 'correctedValue', 'reason', 'createdAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.documentId)
+        && isValidShortId(data.recordId)
+        && isBoundedString(data.fieldName, 1, 80)
+        && isBoundedString(data.originalValue, 0, 500)
+        && isBoundedString(data.correctedValue, 1, 500)
+        && isBoundedString(data.reason, 1, 400)
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: FindingReview
+    function isValidFindingReview(data) {
+      return data.keys().hasAll(['ownerId', 'findingId', 'status', 'analystNote', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'findingId', 'status', 'analystNote', 'createdAt', 'updatedAt'])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.findingId)
+        && data.status in ['Critical', 'Warning', 'Information', 'Resolved', 'Requires Manual Review']
+        && isBoundedString(data.analystNote, 0, 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: SimulationRun (strictly isolated simulated=true)
+    function isValidSimulation(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessId', 'scenarioType', 'shockPercent',
+          'baselineRevenue', 'simulatedRevenue', 'baselineSurplus',
+          'simulatedSurplus', 'baselineLoanCapacity', 'simulatedLoanCapacity',
+          'simulated', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessId', 'scenarioType', 'shockPercent',
+          'baselineRevenue', 'simulatedRevenue', 'baselineSurplus',
+          'simulatedSurplus', 'baselineLoanCapacity', 'simulatedLoanCapacity',
+          'simulated', 'createdAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.businessId)
+        && data.scenarioType in ['revenue_shock', 'collection_shock', 'expense_shock']
+        && data.shockPercent is number && data.shockPercent >= 0 && data.shockPercent <= 100
+        && data.baselineRevenue is number
+        && data.simulatedRevenue is number
+        && data.baselineSurplus is number
+        && data.simulatedSurplus is number
+        && data.baselineLoanCapacity is number
+        && data.simulatedLoanCapacity is number
+        && data.simulated == true
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: InvestigationRecord
+    function isValidInvestigation(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessId', 'query', 'summary',
+          'riskLevel', 'citedDocumentIds', 'toolTraceCount', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessId', 'query', 'summary',
+          'riskLevel', 'citedDocumentIds', 'toolTraceCount', 'createdAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.businessId)
+        && isBoundedString(data.query, 1, 600)
+        && isBoundedString(data.summary, 1, 4000)
+        && data.riskLevel in ['low', 'moderate', 'elevated', 'high']
+        && data.citedDocumentIds is list
+        && data.citedDocumentIds.size() <= 20
+        && (data.citedDocumentIds.size() == 0 || (data.citedDocumentIds[0] is string && data.citedDocumentIds[0].size() <= 64))
+        && data.toolTraceCount is number && data.toolTraceCount >= 0 && data.toolTraceCount <= 50
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: AuditEvent
+    function isValidAuditEvent(data) {
+      return data.keys().hasAll([
+          'ownerId', 'sourceCategory', 'eventType',
+          'affectedRecord', 'actionResult', 'detail', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'sourceCategory', 'eventType',
+          'affectedRecord', 'actionResult', 'detail', 'createdAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && data.sourceCategory in ['ai_generated', 'user_modification', 'hypothetical_simulation', 'system_ingestion', 'privacy_governance']
+        && isBoundedString(data.eventType, 1, 80)
+        && isBoundedString(data.affectedRecord, 1, 120)
+        && isBoundedString(data.actionResult, 1, 60)
+        && isBoundedString(data.detail, 1, 500)
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: MultiAgentRun
+    function isValidMultiAgentRun(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessId', 'query', 'finalSummary', 'status',
+          'riskLevel', 'validationGatePassed', 'verifiedCount', 'rejectedCount',
+          'recommendationCount', 'orchestratorIterations', 'totalDurationMs',
+          'citedDocumentIds', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessId', 'query', 'finalSummary', 'status',
+          'riskLevel', 'validationGatePassed', 'verifiedCount', 'rejectedCount',
+          'recommendationCount', 'orchestratorIterations', 'totalDurationMs',
+          'citedDocumentIds', 'createdAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.businessId)
+        && isBoundedString(data.query, 1, 600)
+        && isBoundedString(data.finalSummary, 1, 4000)
+        && data.status in ['completed', 'completed_with_warnings', 'failed']
+        && data.riskLevel in ['low', 'moderate', 'elevated', 'high']
+        && data.validationGatePassed is bool
+        && data.verifiedCount is number && data.verifiedCount >= 0 && data.verifiedCount <= 100
+        && data.rejectedCount is number && data.rejectedCount >= 0 && data.rejectedCount <= 100
+        && data.recommendationCount is number && data.recommendationCount >= 0 && data.recommendationCount <= 50
+        && data.orchestratorIterations is number && data.orchestratorIterations >= 1 && data.orchestratorIterations <= 5
+        && data.totalDurationMs is number && data.totalDurationMs >= 0 && data.totalDurationMs <= 300000
+        && data.citedDocumentIds is list
+        && data.citedDocumentIds.size() <= 20
+        && (data.citedDocumentIds.size() == 0 || (data.citedDocumentIds[0] is string && data.citedDocumentIds[0].size() <= 64))
+        && data.createdAt is timestamp;
+    }
+
+    // Validation Blueprint: PrivacyPolicySetting
+    function isValidPrivacyPolicy(data) {
+      return data.keys().hasAll([
+          'ownerId', 'businessId', 'defaultRetentionDays',
+          'autoRedactPersonalIdentifiers', 'requireSubmitterAuthorization',
+          'restrictRawDocumentToPrivilegedRoles', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'businessId', 'defaultRetentionDays',
+          'autoRedactPersonalIdentifiers', 'requireSubmitterAuthorization',
+          'restrictRawDocumentToPrivilegedRoles', 'updatedAt'
+        ])
+        && data.ownerId == request.auth.uid
+        && isValidId(data.ownerId)
+        && isValidShortId(data.businessId)
+        && data.defaultRetentionDays is number && data.defaultRetentionDays >= 30 && data.defaultRetentionDays <= 2555
+        && data.autoRedactPersonalIdentifiers is bool
+        && data.requireSubmitterAuthorization is bool
+        && data.restrictRawDocumentToPrivilegedRoles is bool
+        && data.updatedAt is timestamp;
+    }
+
+    // Users collection (Strict PII isolation)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUser(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().role == existing().role
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'businessName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Documents collection
+    match /documents/{documentId} {
+      allow get: if isSignedIn() && isValidId(documentId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(documentId)
+        && isValidDocument(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(documentId)
+        && existing().ownerId == request.auth.uid
+        && isValidDocument(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().businessId == existing().businessId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['ocrStatus', 'verificationStatus', 'extractedSummary', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['verificationStatus', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['category', 'subcategory', 'updatedAt'])
+        );
+      allow delete: if isVerifiedUser() && isValidId(documentId) && existing().ownerId == request.auth.uid;
+    }
+
+    // Manual OCR Corrections (Append-only immutable audit)
+    match /manualCorrections/{correctionId} {
+      allow get: if isSignedIn() && isValidId(correctionId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(correctionId)
+        && isValidCorrection(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Finding Reviews (Terminal state locked once Resolved)
+    match /findingReviews/{reviewId} {
+      allow get: if isSignedIn() && isValidId(reviewId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(reviewId)
+        && isValidFindingReview(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(reviewId)
+        && existing().ownerId == request.auth.uid
+        && existing().status != 'Resolved'
+        && isValidFindingReview(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().findingId == existing().findingId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'analystNote', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Financial Stress-Test Simulations (Isolated hypothetical records)
+    match /simulations/{simulationId} {
+      allow get: if isSignedIn() && isValidId(simulationId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(simulationId)
+        && isValidSimulation(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(simulationId) && existing().ownerId == request.auth.uid;
+    }
+
+    // AI Investigator Sessions
+    match /investigations/{investigationId} {
+      allow get: if isSignedIn() && isValidId(investigationId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(investigationId)
+        && isValidInvestigation(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(investigationId) && existing().ownerId == request.auth.uid;
+    }
+
+    // Chronological Audit Trail (Append-only immutable log)
+    match /auditEvents/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(eventId)
+        && isValidAuditEvent(incoming())
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+
+    // Orchestrated Multi-Agent Investigation Runs (Immutable execution records)
+    match /multiAgentRuns/{runId} {
+      allow get: if isSignedIn() && isValidId(runId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(runId)
+        && isValidMultiAgentRun(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(runId) && existing().ownerId == request.auth.uid;
+    }
+
+    // Privacy & Retention Policies (Owner-isolated workspace configuration)
+    match /privacyPolicies/{policyId} {
+      allow get: if isSignedIn() && isValidId(policyId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(policyId)
+        && isValidPrivacyPolicy(incoming())
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(policyId)
+        && existing().ownerId == request.auth.uid
+        && isValidPrivacyPolicy(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().businessId == existing().businessId
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}

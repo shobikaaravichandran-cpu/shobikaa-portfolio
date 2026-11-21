@@ -1,0 +1,8 @@
+{
+  "name": "EvidenceOS",
+  "description": "AI-powered financial evidence intelligence, graph investigation, document verification, and indicative loan readiness platform for MSMEs.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

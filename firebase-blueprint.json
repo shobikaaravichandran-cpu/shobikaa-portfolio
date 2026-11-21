@@ -1,0 +1,226 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated EvidenceOS analyst profile with strictly isolated PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 254 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "businessName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["analyst"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "displayName", "businessName", "role", "createdAt", "updatedAt"]
+    },
+    "EvidenceDocument": {
+      "title": "EvidenceDocument",
+      "description": "Uploaded financial evidence document metadata and verification state.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fileName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "category": { "type": "string", "enum": ["financial_statements", "banking_documents", "gst_tax_documents", "transaction_documents", "registration_documents", "credit_history_documents", "financial_document", "business_transaction", "operational_document", "supporting_evidence", "identity", "bank", "financial_statement", "loan", "transaction_evidence"] },
+        "subcategory": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "fileSize": { "type": "number" },
+        "mimeType": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "uploadStatus": { "type": "string", "enum": ["uploaded", "processing", "failed"] },
+        "ocrStatus": { "type": "string", "enum": ["pending", "completed", "partial", "failed", "not_applicable"] },
+        "verificationStatus": { "type": "string", "enum": ["Extracted", "Complete", "Missing Information", "Unreadable", "Inconsistent", "Requires Manual Review", "Insufficient Evidence"] },
+        "extractedSummary": { "type": "string", "minLength": 0, "maxLength": 2000 },
+        "isDemo": { "type": "boolean" },
+        "processingPurpose": { "type": "string", "minLength": 5, "maxLength": 240 },
+        "authorizedBySubmitter": { "type": "boolean" },
+        "containsThirdPartyPii": { "type": "boolean" },
+        "piiRedactionApplied": { "type": "boolean" },
+        "retentionPolicyDays": { "type": "number" },
+        "accessScope": { "type": "string", "enum": ["workspace_authorized_only", "restricted_owner_only"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "businessId", "fileName", "category", "subcategory", "fileSize", "mimeType", "uploadStatus", "ocrStatus", "verificationStatus", "extractedSummary", "isDemo", "processingPurpose", "authorizedBySubmitter", "containsThirdPartyPii", "piiRedactionApplied", "retentionPolicyDays", "accessScope", "createdAt", "updatedAt"]
+    },
+    "ManualCorrection": {
+      "title": "ManualCorrection",
+      "description": "Immutable audit record of a manual analyst correction on an OCR-extracted field.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "documentId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recordId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "fieldName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "originalValue": { "type": "string", "minLength": 0, "maxLength": 500 },
+        "correctedValue": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "documentId", "recordId", "fieldName", "originalValue", "correctedValue", "reason", "createdAt"]
+    },
+    "FindingReview": {
+      "title": "FindingReview",
+      "description": "Analyst review state and investigation notes for a verification finding.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "findingId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "status": { "type": "string", "enum": ["Critical", "Warning", "Information", "Resolved", "Requires Manual Review"] },
+        "analystNote": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "findingId", "status", "analystNote", "createdAt", "updatedAt"]
+    },
+    "SimulationRun": {
+      "title": "SimulationRun",
+      "description": "Isolated hypothetical financial stress-test run strictly marked simulated=true.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "scenarioType": { "type": "string", "enum": ["revenue_shock", "collection_shock", "expense_shock"] },
+        "shockPercent": { "type": "number" },
+        "baselineRevenue": { "type": "number" },
+        "simulatedRevenue": { "type": "number" },
+        "baselineSurplus": { "type": "number" },
+        "simulatedSurplus": { "type": "number" },
+        "baselineLoanCapacity": { "type": "number" },
+        "simulatedLoanCapacity": { "type": "number" },
+        "simulated": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "businessId", "scenarioType", "shockPercent", "baselineRevenue", "simulatedRevenue", "baselineSurplus", "simulatedSurplus", "baselineLoanCapacity", "simulatedLoanCapacity", "simulated", "createdAt"]
+    },
+    "InvestigationRecord": {
+      "title": "InvestigationRecord",
+      "description": "Structured AI Investigator query and evidence-backed summary.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "query": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "riskLevel": { "type": "string", "enum": ["low", "moderate", "elevated", "high"] },
+        "citedDocumentIds": { "type": "array" },
+        "toolTraceCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "businessId", "query", "summary", "riskLevel", "citedDocumentIds", "toolTraceCount", "createdAt"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Immutable chronological audit trail record separating AI, user, and simulation actions.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sourceCategory": { "type": "string", "enum": ["ai_generated", "user_modification", "hypothetical_simulation", "system_ingestion", "privacy_governance"] },
+        "eventType": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "affectedRecord": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actionResult": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "detail": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "sourceCategory", "eventType", "affectedRecord", "actionResult", "detail", "createdAt"]
+    },
+    "MultiAgentRun": {
+      "title": "MultiAgentRun",
+      "description": "Persisted orchestrated 5-agent EvidenceOS investigation run summary with provenance counts and validation gate status.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "query": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "finalSummary": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "status": { "type": "string", "enum": ["completed", "completed_with_warnings", "failed"] },
+        "riskLevel": { "type": "string", "enum": ["low", "moderate", "elevated", "high"] },
+        "validationGatePassed": { "type": "boolean" },
+        "verifiedCount": { "type": "number" },
+        "rejectedCount": { "type": "number" },
+        "recommendationCount": { "type": "number" },
+        "orchestratorIterations": { "type": "number" },
+        "totalDurationMs": { "type": "number" },
+        "citedDocumentIds": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId",
+        "businessId",
+        "query",
+        "finalSummary",
+        "status",
+        "riskLevel",
+        "validationGatePassed",
+        "verifiedCount",
+        "rejectedCount",
+        "recommendationCount",
+        "orchestratorIterations",
+        "totalDurationMs",
+        "citedDocumentIds",
+        "createdAt"
+      ]
+    },
+    "PrivacyPolicySetting": {
+      "title": "PrivacyPolicySetting",
+      "description": "Owner-isolated workspace data retention, PII minimisation, and raw document access control settings.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "businessId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "defaultRetentionDays": { "type": "number" },
+        "autoRedactPersonalIdentifiers": { "type": "boolean" },
+        "requireSubmitterAuthorization": { "type": "boolean" },
+        "restrictRawDocumentToPrivilegedRoles": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerId",
+        "businessId",
+        "defaultRetentionDays",
+        "autoRedactPersonalIdentifiers",
+        "requireSubmitterAuthorization",
+        "restrictRawDocumentToPrivilegedRoles",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private analyst profile isolated to the owning user."
+    },
+    "/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/EvidenceDocument" },
+      "description": "User-owned authorized business evidence document records with privacy & retention metadata."
+    },
+    "/manualCorrections/{correctionId}": {
+      "schema": { "$ref": "#/entities/ManualCorrection" },
+      "description": "Append-only OCR manual correction trail."
+    },
+    "/findingReviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/FindingReview" },
+      "description": "Analyst review state and resolution notes on findings."
+    },
+    "/simulations/{simulationId}": {
+      "schema": { "$ref": "#/entities/SimulationRun" },
+      "description": "Isolated hypothetical financial stress-test simulation runs."
+    },
+    "/investigations/{investigationId}": {
+      "schema": { "$ref": "#/entities/InvestigationRecord" },
+      "description": "Evidence-backed AI Investigator queries and conclusions."
+    },
+    "/auditEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/AuditEvent" },
+      "description": "Immutable chronological audit log including privacy & governance actions."
+    },
+    "/multiAgentRuns/{runId}": {
+      "schema": { "$ref": "#/entities/MultiAgentRun" },
+      "description": "Persisted orchestrated 5-agent EvidenceOS investigation run records."
+    },
+    "/privacyPolicies/{policyId}": {
+      "schema": { "$ref": "#/entities/PrivacyPolicySetting" },
+      "description": "Owner-isolated workspace data retention and PII minimisation policies."
+    }
+  }
+}
